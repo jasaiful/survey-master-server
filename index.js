@@ -11,7 +11,6 @@ const port = process.env.PORT || 5000;
 app.use(express.json());
 app.use(cors());
 
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.imeoc20.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -23,6 +22,9 @@ const client = new MongoClient(uri, {
     }
 });
 
+const Survey = require('./surveyModel');
+const surveyRoutes = require('./surveyRoutes');
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -30,6 +32,7 @@ async function run() {
 
         const userCollection = client.db("surveyMaster").collection("users");
         const reviewCollection = client.db("surveyMaster").collection("reviews");
+        const surveyCollection = client.db("surveyMaster").collection("surveys");
 
         // JWT related api
         app.post('/jwt', async (req, res) => {
@@ -102,18 +105,66 @@ async function run() {
 
 
         // update users
-        app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
-            const id = req.params.id;
-            const filter = { _id: new ObjectId(id) };
-            const updatedDoc = {
-                $set: {
-                    role: 'admin'
-                }
-            }
-            const result = await userCollection.updateOne(filter, updatedDoc);
-            res.send(result);
-        })
+        // app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
+        //     const id = req.params.id;
+        //     const filter = { _id: new ObjectId(id) };
+        //     const updatedDoc = {
+        //         $set: {
+        //             role: 'admin'
+        //         }
+        //     }
+        //     const result = await userCollection.updateOne(filter, updatedDoc);
+        //     res.send(result);
+        // })
+        // app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
+        //     try {
+        //         const id = req.params.id;
+        //         const { role } = req.body; // Extract the role from the request body
+        //         const filter = { _id: new ObjectId(id) };
+        //         const updatedDoc = {
+        //             $set: {
+        //                 role: role // Set the role to the one received from the request body
+        //             }
+        //         }
+        //         const result = await userCollection.updateOne(filter, updatedDoc);
+        //         res.send(result);
+        //     } catch (error) {
+        //         res.status(500).send({ message: 'Error updating user role' });
+        //     }
+        // });
 
+        app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
+            try {
+                const id = req.params.id;
+                const { role } = req.body; // Extract the role from the request body
+                const filter = { _id: new ObjectId(id) };
+                const updatedDoc = {
+                    $set: {
+                        role: role // Set the role to the one received from the request body
+                    }
+                }
+                const result = await userCollection.updateOne(filter, updatedDoc);
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: 'Error updating user role' });
+            }
+        });
+
+        app.get('/users/surveyor/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            const query = { email: email };
+            const user = await userCollection.findOne(query);
+            let surveyor = false;
+            if (user) {
+                surveyor = user?.role === 'surveyor';
+            }
+            res.send({ surveyor });
+        })
+ 
+        
         // delete user
         app.delete('/users/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
@@ -127,7 +178,29 @@ async function run() {
         app.get('/reviews', async (req, res) => {
             const result = await reviewCollection.find().toArray();
             res.send(result);
-        })
+        });
+
+        // Get all surveys
+        app.get('/surveys', async (req, res) => {
+            try {
+                const surveys = await surveyCollection.find().toArray();
+                res.json(surveys);
+            } catch (error) {
+                res.status(500).json({ message: error.message });
+            }
+        });
+
+        // Create a new survey
+        app.post('/surveys', async (req, res) => {
+            try {
+                const newSurvey = req.body; // Assuming the request body contains survey details
+                const result = await surveyCollection.insertOne(newSurvey);
+                res.status(201).json(result);
+            } catch (error) {
+                res.status(400).json({ message: error.message });
+            }
+        });
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
@@ -139,7 +212,8 @@ async function run() {
 }
 run().catch(console.dir);
 
-
+// Use the survey routes
+app.use('/surveys', surveyRoutes);
 
 app.get('/', (req, res) => {
     res.send('Server is running')
