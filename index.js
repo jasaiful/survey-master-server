@@ -104,35 +104,6 @@ async function run() {
         })
 
 
-        // update users
-        // app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
-        //     const id = req.params.id;
-        //     const filter = { _id: new ObjectId(id) };
-        //     const updatedDoc = {
-        //         $set: {
-        //             role: 'admin'
-        //         }
-        //     }
-        //     const result = await userCollection.updateOne(filter, updatedDoc);
-        //     res.send(result);
-        // })
-        // app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
-        //     try {
-        //         const id = req.params.id;
-        //         const { role } = req.body; // Extract the role from the request body
-        //         const filter = { _id: new ObjectId(id) };
-        //         const updatedDoc = {
-        //             $set: {
-        //                 role: role // Set the role to the one received from the request body
-        //             }
-        //         }
-        //         const result = await userCollection.updateOne(filter, updatedDoc);
-        //         res.send(result);
-        //     } catch (error) {
-        //         res.status(500).send({ message: 'Error updating user role' });
-        //     }
-        // });
-
         app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
@@ -163,8 +134,8 @@ async function run() {
             }
             res.send({ surveyor });
         })
- 
-        
+
+
         // delete user
         app.delete('/users/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
@@ -190,11 +161,15 @@ async function run() {
             }
         });
 
+       
         // Create a new survey
-        app.post('/surveys', async (req, res) => {
+        app.post('/surveys', verifyToken, async (req, res) => {
             try {
-                const newSurvey = req.body; // Assuming the request body contains survey details
-                const result = await surveyCollection.insertOne(newSurvey);
+                const surveyData = req.body; // Assuming the request body contains survey details
+                // Add timestamp to the survey data
+                surveyData.timestamp = new Date().toISOString();
+
+                const result = await surveyCollection.insertOne(surveyData);
                 res.status(201).json(result);
             } catch (error) {
                 res.status(400).json({ message: error.message });
