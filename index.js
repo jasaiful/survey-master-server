@@ -4,6 +4,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const app = express();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const port = process.env.PORT || 5000;
 
@@ -107,11 +108,11 @@ async function run() {
         app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
-                const { role } = req.body; // Extract the role from the request body
+                const { role } = req.body;
                 const filter = { _id: new ObjectId(id) };
                 const updatedDoc = {
                     $set: {
-                        role: role // Set the role to the one received from the request body
+                        role: role
                     }
                 }
                 const result = await userCollection.updateOne(filter, updatedDoc);
@@ -161,11 +162,12 @@ async function run() {
             }
         });
 
-       
+
         // Create a new survey
         app.post('/surveys', verifyToken, async (req, res) => {
             try {
-                const surveyData = req.body; // Assuming the request body contains survey details
+                const surveyData = req.body;
+
                 // Add timestamp to the survey data
                 surveyData.timestamp = new Date().toISOString();
 
@@ -175,6 +177,50 @@ async function run() {
                 res.status(400).json({ message: error.message });
             }
         });
+
+
+
+        // payment related apis
+
+        app.post('/create-payment-intent', async (req, res) => {
+            try {
+                const { price } = req.body;
+
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: price * 100,
+                    currency: 'usd',
+                });
+
+                res.status(200).json({ clientSecret: paymentIntent.client_secret });
+            } catch (error) {
+                console.error('Error creating payment intent:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+
+
+        // update user role:
+        app.post('/upgrade-user-role', async (req, res) => {
+            try {
+                const { userId } = req.body;
+
+                const filter = { _id: new ObjectId(userId) };
+                const update = { $set: { role: 'pro-user' } };
+
+                const updatedUser = await userCollection.findOneAndUpdate(filter, update, { returnDocument: 'after' });
+
+                if (!updatedUser.value) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+
+                res.status(200).json({ message: 'User role updated successfully', user: updatedUser.value });
+            } catch (error) {
+                console.error('Error upgrading user role:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+
+
 
 
         // Send a ping to confirm a successful connection
